@@ -1,0 +1,592 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mapa de Procesos - Wipost</title>
+    <!-- Importación de Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Tipografía Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <style>
+        /* Estilo base para la tipografía */
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6; /* bg-gray-100 */
+        }
+
+        /* Estilos para los elementos del diagrama BPMN */
+        .task-node {
+            position: relative; /* Necesario para que z-index funcione */
+            z-index: 10;
+            padding: 0.75rem 1.25rem; /* p-3 p-5 */
+            border-radius: 0.5rem; /* rounded-lg */
+            background-color: white; /* bg-white */
+            border: 1px solid #d1d5db; /* border-gray-300 */
+            box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06); /* shadow-sm */
+            min-height: 80px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            font-size: 0.875rem; /* text-sm */
+            font-weight: 500; /* medium */
+            color: #374151; /* text-gray-700 */
+            transition: all 0.2s ease-in-out;
+            cursor: pointer;
+        }
+
+        .task-node:hover {
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06); /* shadow-md */
+            transform: translateY(-2px);
+        }
+
+        /* Estilos específicos por tipo */
+        .task-start {
+            background-color: #dcfce7; /* bg-green-100 */
+            border-color: #86efac; /* border-green-300 */
+            color: #166534; /* text-green-800 */
+            border-radius: 9999px; /* rounded-full */
+            width: 80px;
+            height: 80px;
+            font-weight: 600; /* semibold */
+        }
+        
+        .task-end {
+            background-color: #fee2e2; /* bg-red-100 */
+            border-color: #fca5a5; /* border-red-300 */
+            color: #991b1b; /* text-red-800 */
+            border-radius: 9999px; /* rounded-full */
+            width: 80px;
+            height: 80px;
+            font-weight: 600; /* semibold */
+        }
+
+        .task-decision {
+            background-color: #fef3c7; /* bg-amber-100 */
+            border-color: #fcd34d; /* border-amber-300 */
+            color: #92400e; /* text-amber-800 */
+            transform: rotate(45deg);
+            width: 90px;
+            height: 90px;
+            min-height: 90px;
+        }
+        
+        /* Contenedor para el texto dentro del rombo */
+        .decision-text {
+            transform: rotate(-45deg);
+            max-width: 100px;
+        }
+
+        .task-warning {
+            background-color: #fffbeb; /* bg-yellow-50 */
+            border-color: #fde047; /* border-yellow-300 */
+            color: #a16207; /* text-yellow-800 */
+            border-style: dashed;
+        }
+
+        /* Capa SVG para las flechas */
+        #arrow-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+            overflow: visible; /* Para que las flechas no se corten */
+        }
+
+        /* Estilo para las tarjetas de análisis */
+        .analysis-card {
+            background-color: white;
+            border-radius: 0.75rem; /* rounded-xl */
+            padding: 1.5rem; /* p-6 */
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06); /* shadow-lg */
+            transition: all 0.2s ease-in-out;
+            cursor: pointer;
+            border: 2px solid transparent;
+        }
+
+        .analysis-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05); /* shadow-xl */
+        }
+
+        /* Estilo para la tarjeta de Oportunidad */
+        .opportunity-card {
+            background-color: #ecfdf5; /* bg-emerald-50 */
+            border-color: #6ee7b7; /* border-emerald-300 */
+        }
+        .opportunity-card:hover {
+            border-color: #34d399; /* border-emerald-400 */
+        }
+        .opportunity-card h4 {
+            color: #065f46; /* text-emerald-800 */
+        }
+
+        /* Clase de resaltado dinámico */
+        .highlight {
+            z-index: 20;
+            outline: 4px solid #3b82f6; /* outline-blue-500 */
+            outline-offset: 4px;
+            box-shadow: 0 0 20px 5px rgba(59, 130, 246, 0.4); /* Sombra azul */
+            transform: scale(1.05) translateY(-2px);
+        }
+    </style>
+</head>
+<body class="bg-gray-100 p-4 md:p-8">
+
+    <div class="container mx-auto max-w-7xl">
+        <!-- Encabezado -->
+        <header class="mb-8">
+            <h1 class="text-3xl md:text-4xl font-bold text-gray-800">Mapa de Procesos de Negocio</h1>
+            <h2 class="text-xl md:text-2xl font-semibold text-indigo-600">Organización y Producción Wipost</h2>
+        </header>
+
+        <!-- Diagrama BPMN -->
+        <div class="bg-white rounded-xl shadow-lg p-4 sm:p-8 overflow-x-auto">
+            <!-- Contenedor relativo para el SVG y las lanes -->
+            <div id="bpmn-container" class="relative min-w-[1400px]">
+                
+                <!-- Capa SVG para flechas -->
+                <svg id="arrow-layer"></svg>
+
+                <!-- Contenedor de las Lanes (Carriles) -->
+                <div class="grid grid-cols-4 gap-6">
+                    
+                    <!-- Lane 1: Cliente -->
+                    <div class="flex flex-col items-center space-y-12 p-4 bg-gray-50 rounded-lg min-h-[800px]">
+                        <h3 class="text-xl font-bold text-center text-blue-700 p-3 bg-blue-100 rounded-lg w-full">CLIENTE</h3>
+                        
+                        <div id="task-start" class="task-node task-start">Inicio</div>
+                        
+                        <div id="task-solicitud" class="task-node" onclick="clearHighlights()">
+                            Recepción de solicitud del cliente
+                        </div>
+                        
+                        <div id="task-aprueba" class="task-node task-decision" onclick="clearHighlights()">
+                            <span class="decision-text">¿Cliente aprueba?</span>
+                        </div>
+                        
+                        <!-- Espaciador para alinear con "Entrega" -->
+                        <div class="h-40"></div>
+                        
+                        <div id="task-cambios" class="task-node task-decision" onclick="highlightAnalysisCard('note-cuello')">
+                            <span class="decision-text">¿Solicita cambios?</span>
+                        </div>
+
+                        <div id="task-aprobacion-final" class="task-node" onclick="clearHighlights()">
+                            Aprobación final
+                        </div>
+
+                        <div id="task-fin" class="task-node task-end">Fin</div>
+                    </div>
+
+                    <!-- Lane 2: Productores -->
+                    <div class="flex flex-col items-center space-y-12 p-4 bg-gray-50 rounded-lg min-h-[800px]">
+                        <h3 class="text-xl font-bold text-center text-green-700 p-3 bg-green-100 rounded-lg w-full">PRODUCTORES</h3>
+                        
+                        <!-- Espaciador para alinear con "Inicio" -->
+                        <div class="h-16"></div>
+
+                        <div id="task-presupuesto" class="task-node" onclick="clearHighlights()">
+                            Revisa solicitud y elabora presupuesto
+                        </div>
+                        
+                        <div id="task-asigna" class="task-node" onclick="highlightAnalysisCard('note-oportunidad')">
+                            Asigna proyecto a productor y artista(s)
+                        </div>
+
+                        <div id="task-gestion" class="task-node task-warning" onclick="highlightAnalysisCard('note-fragmentado')">
+                            Gestión de tareas y calendario (Excel/Outlook)
+                        </div>
+                        
+                        <div id_old="task-valida" class="h-20"></div>
+
+                        <div id="task-valida" class="task-node" onclick="clearHighlights()">
+                            Productor valida entregables
+                        </div>
+
+                        <div id="task-entrega" class="task-node" onclick="clearHighlights()">
+                            Entrega al cliente
+                        </div>
+                    </div>
+
+                    <!-- Lane 3: Artistas -->
+                    <div class="flex flex-col items-center space-y-12 p-4 bg-gray-50 rounded-lg min-h-[800px]">
+                        <h3 class="text-xl font-bold text-center text-purple-700 p-3 bg-purple-100 rounded-lg w-full">ARTISTAS</h3>
+                        
+                        <!-- Espaciador para alinear -->
+                        <div class="h-64"></div>
+
+                        <div id="task-realiza" class="task-node" onclick="highlightAnalysisCard('note-cuello')">
+                            Artistas realizan el trabajo asignado
+                        </div>
+                        
+                        <div id="task-revision" class="task-node" onclick="clearHighlights()">
+                            Revisión interna
+                        </div>
+
+                        <div id="task-retrabajo" class="task-node task-warning" onclick="highlightAnalysisCard('note-cuello')">
+                            Retrabajo por cambios
+                        </div>
+                    </div>
+
+                    <!-- Lane 4: Admin / Tec -->
+                    <div class="flex flex-col items-center space-y-12 p-4 bg-gray-50 rounded-lg min-h-[800px]">
+                        <h3 class="text-xl font-bold text-center text-gray-700 p-3 bg-gray-200 rounded-lg w-full">ADMIN. / TECNOLOGÍA</h3>
+                        
+                        <!-- Espaciador para alinear -->
+                        <div class="h-[650px]"></div>
+
+                        <div id="task-cierre" class="task-node" onclick="clearHighlights()">
+                            Cierres contables y de proyecto
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+
+        <!-- Sección de Análisis y Hallazgos -->
+        <section class="mt-12">
+            <h3 class="text-2xl font-bold text-gray-800 mb-6">Análisis y Oportunidades</h3>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                
+                <!-- Card 1: Cuello de Botella -->
+                <div id="note-cuello" class="analysis-card" onclick="highlightTasks(['task-cambios', 'task-realiza', 'task-retrabajo'])">
+                    <h4 class="text-lg font-semibold text-red-700 mb-2 flex items-center">
+                        <span class="text-2xl mr-3">⚠️</span> Cuello de Botella
+                    </h4>
+                    <p class="text-gray-600">
+                        Cambios tardíos del cliente y falta de visibilidad del avance real de los artistas.
+                    </p>
+                </div>
+
+                <!-- Card 2: Herramientas Fragmentadas -->
+                <div id="note-fragmentado" class="analysis-card" onclick="highlightTasks(['task-gestion'])">
+                    <h4 class="text-lg font-semibold text-yellow-700 mb-2 flex items-center">
+                        <span class="text-2xl mr-3">🧩</span> Herramientas Fragmentadas
+                    </h4>
+                    <p class="text-gray-600">
+                        Uso de Excel compartido, Outlook y Slack parcial. No hay una fuente única de verdad.
+                    </p>
+                </div>
+
+                <!-- Card 3: Oportunidad Estratégica -->
+                <div id="note-oportunidad" class="analysis-card opportunity-card" onclick="highlightTasks(['task-gestion', 'task-asigna', 'task-realiza'])">
+                    <h4 class="text-lg font-semibold mb-2 flex items-center">
+                        <span class="text-2xl mr-3">💡</span> Oportunidad Estratégica
+                    </h4>
+                    <p class="text-gray-600">
+                        Plataforma centralizada con seguimiento de tareas y uso de IA para comunicación y asignación.
+                    </p>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <script>
+        // --- LÓGICA DE INTERACTIVIDAD ---
+
+        /**
+         * Limpia todos los resaltados activos en el diagrama y las tarjetas.
+         */
+        function clearHighlights() {
+            // Limpiar resaltado de tareas
+            document.querySelectorAll('.task-node').forEach(el => {
+                el.classList.remove('highlight');
+            });
+            // Limpiar resaltado de tarjetas
+            document.querySelectorAll('.analysis-card').forEach(el => {
+                el.classList.remove('highlight');
+            });
+        }
+
+        /**
+         * Resalta un conjunto de tareas en el diagrama.
+         * @param {string[]} taskIds - Array de IDs de las tareas a resaltar.
+         */
+        function highlightTasks(taskIds = []) {
+            clearHighlights();
+            let firstElement = null;
+            
+            taskIds.forEach(id => {
+                const el = document.getElementById(id);
+                if (el) {
+                    el.classList.add('highlight');
+                    if (!firstElement) {
+                        firstElement = el;
+                    }
+                }
+            });
+
+            // Hacer scroll hacia el primer elemento resaltado
+            if (firstElement) {
+                firstElement.scrollIntoView({
+                    behavior: 'smooth',
+                    block: 'center',
+                    inline: 'center'
+                });
+            }
+        }
+
+        /**
+         * Resalta una tarjeta de análisis.
+         * @param {string} cardId - ID de la tarjeta a resaltar.
+         */
+        function highlightAnalysisCard(cardId) {
+            clearHighlights();
+            const card = document.getElementById(cardId);
+            if (card) {
+                card.classList.add('highlight');
+                card.scrollIntoView({
+                    behavior: 'smooth',
+                    block: 'center'
+                });
+            }
+        }
+
+
+        // --- LÓGICA PARA DIBUJAR FLECHAS ---
+
+        /**
+         * Dibuja todas las flechas de conexión en el SVG.
+         */
+        function drawArrows() {
+            const svg = document.getElementById('arrow-layer');
+            const container = document.getElementById('bpmn-container');
+            svg.innerHTML = ''; // Limpiar flechas anteriores
+
+            // Definir la punta de la flecha
+            svg.innerHTML = `
+                <defs>
+                    <marker
+                        id="arrowhead"
+                        markerWidth="10"
+                        markerHeight="7"
+                        refX="8"
+                        refY="3.5"
+                        orient="auto">
+                        <polygon points="0 0, 10 3.5, 0 7" fill="#6b7280" />
+                    </marker>
+                    <marker
+                        id="arrowhead-red"
+                        markerWidth="10"
+                        markerHeight="7"
+                        refX="8"
+                        refY="3.5"
+                        orient="auto">
+                        <polygon points="0 0, 10 3.5, 0 7" fill="#ef4444" />
+                    </marker>
+                </defs>
+            `;
+
+            // Definición de las conexiones
+            const connections = [
+                // Flujo principal
+                { from: 'task-start', to: 'task-solicitud', side: 'bottom' },
+                { from: 'task-solicitud', to: 'task-presupuesto', side: 'right' },
+                { from: 'task-presupuesto', to: 'task-aprueba', side: 'left' },
+                { from: 'task-aprueba', to: 'task-asigna', side: 'right', text: 'Sí' },
+                { from: 'task-asigna', to: 'task-gestion', side: 'bottom' },
+                { from: 'task-gestion', to: 'task-realiza', side: 'right' },
+                { from: 'task-realiza', to: 'task-revision', side: 'bottom' },
+                { from: 'task-revision', to: 'task-valida', side: 'left' },
+                { from: 'task-valida', to: 'task-entrega', side: 'bottom' },
+                { from: 'task-entrega', to: 'task-cambios', side: 'left' },
+                
+                // Flujo de cambios (bucle)
+                { 
+                    from: 'task-cambios', 
+                    to: 'task-retrabajo', 
+                    side: 'right', 
+                    text: 'Sí (Cambios)',
+                    color: '#ef4444', // red-500
+                    marker: 'url(#arrowhead-red)'
+                },
+                { 
+                    from: 'task-retrabajo', 
+                    to: 'task-valida', 
+                    side: 'left', 
+                    color: '#ef4444',
+                    marker: 'url(#arrowhead-red)'
+                },
+                
+                // Flujo de aprobación final
+                { from: 'task-cambios', to: 'task-aprobacion-final', side: 'bottom', text: 'No (Aprobado)' },
+                { from: 'task-aprobacion-final', to: 'task-cierre', side: 'right' },
+                { from: 'task-cierre', to: 'task-fin', side: 'left' },
+            ];
+
+            const containerRect = container.getBoundingClientRect();
+
+            connections.forEach(conn => {
+                const elFrom = document.getElementById(conn.from);
+                const elTo = document.getElementById(conn.to);
+                if (!elFrom || !elTo) return;
+
+                // Obtener posiciones relativas al contenedor BPMN
+                const fromRect = elFrom.getBoundingClientRect();
+                const toRect = elTo.getBoundingClientRect();
+
+                // Calcular puntos de inicio y fin relativos al SVG
+                const start = getCoords(fromRect, containerRect, conn.side);
+                let endSide = conn.endSide || getOppositeSide(conn.side);
+                
+                // Lógica especial para bucles
+                if (conn.to === 'task-valida' && conn.from === 'task-retrabajo') {
+                    endSide = 'right'; // Forzar entrada por la derecha
+                }
+
+                const end = getCoords(toRect, containerRect, endSide);
+                
+                // Dibujar la línea (path)
+                drawSvgPath(svg, start, end, conn);
+            });
+        }
+
+        /**
+         * Calcula las coordenadas de un punto de conexión en un elemento.
+         * @param {DOMRect} elRect - Rect del elemento.
+         * @param {DOMRect} containerRect - Rect del contenedor.
+         * @param {string} side - 'top', 'bottom', 'left', 'right'.
+         * @returns {{x: number, y: number}}
+         */
+        function getCoords(elRect, containerRect, side) {
+            const x = elRect.left - containerRect.left;
+            const y = elRect.top - containerRect.top;
+
+            switch (side) {
+                case 'top':
+                    return { x: x + elRect.width / 2, y: y };
+                case 'bottom':
+                    return { x: x + elRect.width / 2, y: y + elRect.height };
+                case 'left':
+                    return { x: x, y: y + elRect.height / 2 };
+                case 'right':
+                    return { x: x + elRect.width, y: y + elRect.height / 2 };
+                default:
+                    return { x: x, y: y }; // fallback
+            }
+        }
+
+        /**
+         * Obtiene el lado opuesto para la conexión.
+         * @param {string} side - 'top', 'bottom', 'left', 'right'.
+         * @returns {string}
+         */
+        function getOppositeSide(side) {
+            switch (side) {
+                case 'top': return 'bottom';
+                case 'bottom': return 'top';
+                case 'left': return 'right';
+                case 'right': return 'left';
+                default: return 'left';
+            }
+        }
+
+        /**
+         * Dibuja un <path> SVG entre dos puntos.
+         * @param {SVGElement} svg - El elemento SVG.
+         * @param {{x: number, y: number}} start - Punto de inicio.
+         * @param {{x: number, y: number}} end - Punto de fin.
+         * @param {object} conn - Objeto de conexión con opciones.
+         */
+        function drawSvgPath(svg, start, end, conn) {
+            const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+            const { side } = conn;
+            
+            let d = `M ${start.x} ${start.y} `; // Move to start
+            
+            // Lógica para crear un codo (L shape)
+            if (side === 'bottom' || side === 'top') {
+                const midY = (start.y + end.y) / 2;
+                d += `V ${midY} H ${end.x} V ${end.y}`; // Vertical, Horizontal, Vertical
+            } else { // 'left' or 'right'
+                const midX = (start.x + end.x) / 2;
+                // Ajuste para el bucle de retrabajo
+                if(conn.from === 'task-retrabajo' && conn.to === 'task-valida') {
+                    const controlX = start.x - 100; // Curva hacia la izquierda
+                    d = `M ${start.x} ${start.y} Q ${controlX} ${start.y} ${controlX} ${start.y - 100} T ${controlX} ${end.y} H ${end.x}`;
+                } else {
+                    d += `H ${midX} V ${end.y} H ${end.x}`; // Horizontal, Vertical, Horizontal
+                }
+            }
+
+            path.setAttribute('d', d);
+            path.setAttribute('fill', 'none');
+            path.setAttribute('stroke', conn.color || '#6b7280'); // gray-500
+            path.setAttribute('stroke-width', '2');
+            path.setAttribute('marker-end', conn.marker || 'url(#arrowhead)');
+            
+            svg.appendChild(path);
+
+            // Añadir texto (etiqueta) a la flecha si existe
+            if (conn.text) {
+                const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                let textX, textY;
+
+                if (side === 'bottom' || side === 'top') {
+                    textX = (start.x + end.x) / 2 + 5;
+                    textY = (start.y + end.y) / 2;
+                } else {
+                    textX = (start.x + end.x) / 2;
+                    textY = (start.y + end.y) / 2 - 5;
+                }
+                
+                // Ajuste especial para 'Sí' del rombo de aprobación
+                if(conn.from === 'task-aprueba' && conn.text === 'Sí') {
+                    textX = (start.x + end.x) / 2;
+                    textY = start.y + 15;
+                }
+                
+                // Ajuste para 'No' del rombo de cambios
+                if(conn.from === 'task-cambios' && conn.text === 'No (Aprobado)') {
+                    textX = start.x;
+                    textY = (start.y + end.y) / 2 - 5;
+                }
+                
+                // Ajuste para 'Sí' del rombo de cambios
+                if(conn.from === 'task-cambios' && conn.text === 'Sí (Cambios)') {
+                    textX = (start.x + end.x) / 2;
+                    textY = start.y + 15;
+                }
+
+
+                text.setAttribute('x', textX);
+                text.setAttribute('y', textY);
+                text.setAttribute('font-size', '12px');
+                text.setAttribute('font-weight', '600');
+                text.setAttribute('fill', conn.color || '#4b5563'); // gray-600
+                text.setAttribute('paint-order', 'stroke');
+                text.setAttribute('stroke', '#ffffff');
+                text.setAttribute('stroke-width', '3px');
+                text.setAttribute('stroke-linecap', 'butt');
+                text.setAttribute('stroke-linejoin', 'miter');
+                text.textContent = conn.text;
+                svg.appendChild(text);
+            }
+        }
+
+        // --- INICIALIZACIÓN ---
+        
+        // Dibujar flechas al cargar y al redimensionar la ventana
+        window.addEventListener('load', drawArrows);
+        window.addEventListener('resize', drawArrows);
+
+        // También redibujar si se hace scroll (útil para layouts complejos)
+        // Usamos un debounce para no sobrecargar
+        let resizeTimer;
+        window.addEventListener('scroll', () => {
+            clearTimeout(resizeTimer);
+            resizeTimer = setTimeout(drawArrows, 100);
+        });
+
+    </script>
+
+</body>
+</html>
